@@ -1,5 +1,15 @@
 USE ecommerce_db;
 
+-- Tabla base Clientes para la gestion de clientes
+CREATE TABLE IF NOT EXISTS Clientes (
+    id_cliente INT AUTO_INCREMENT PRIMARY KEY,
+    nombre VARCHAR(100) NOT NULL,
+    email VARCHAR(150) NOT NULL UNIQUE,
+    direccion_envio VARCHAR(255) NOT NULL,
+    telefono VARCHAR(30) NULL,
+    fecha_registro TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
 -- Tabla de auditoria para registrar modificaciones en datos sensibles de clientes
 CREATE TABLE IF NOT EXISTS Auditoria_Clientes (
     id_auditoria INT AUTO_INCREMENT PRIMARY KEY,
