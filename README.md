@@ -163,6 +163,11 @@ Las 20 consultas resuelven interrogantes clave de inteligencia de negocios:
 * `sp_get_related_products`: Recomendaciones basadas en co-compras.
 * `sp_move_products_between_categories`: Reubicación masiva de productos entre categorías con sincronización de contadores.
 
+### 8. Auditoría de Seguridad de Clientes (`08_Auditoria_Clientes.sql`)
+Módulo de cumplimiento y seguridad para trazabilidad de datos personales sensibles:
+* **Tabla de Auditoría:** `Auditoria_Clientes` (`id_auditoria`, `id_cliente`, `campo_modificado`, `valor_antiguo`, `valor_nuevo`, `fecha_modificacion`).
+* **Disparador Reactivo:** `trg_audit_cliente_after_update` (`AFTER UPDATE`), diseñado para registrar de forma atómica cualquier modificación en `email` o `direccion_envio` (con notas de compatibilidad directa para `customers` y `shipping_address`).
+
 ---
 
 ## Requisitos de Entrega en GitHub
@@ -171,4 +176,5 @@ Las 20 consultas resuelven interrogantes clave de inteligencia de negocios:
    Proyecto_BD_Avanzada_[NombreEquipo]
    ```
 2. **Invitación al Trainer:** Recuerde invitar al *trainer* como colaborador con permisos de lectura para la revisión y calificación del proyecto.
-3. **Ubicación de Archivos:** Todos los scripts SQL (`01_Esquema_y_Datos.sql` al `07_Procedimientos_Almacenados.sql`) y este archivo `README.md` deben residir en la **raíz** del repositorio para garantizar su correcta ejecución secuencial.
+3. **Ubicación de Archivos:** Todos los scripts SQL (`01_Esquema_y_Datos.sql` al `08_Auditoria_Clientes.sql`) y este archivo `README.md` deben residir en la **raíz** del repositorio para garantizar su correcta ejecución secuencial.
+
