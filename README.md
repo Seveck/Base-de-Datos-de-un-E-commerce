@@ -164,9 +164,10 @@ Las 20 consultas resuelven interrogantes clave de inteligencia de negocios:
 * `sp_move_products_between_categories`: Reubicación masiva de productos entre categorías con sincronización de contadores.
 
 ### 8. Auditoría de Seguridad de Clientes (`08_Auditoria_Clientes.sql`)
-Módulo de cumplimiento y seguridad para trazabilidad de datos personales sensibles:
-* **Tabla de Auditoría:** `Auditoria_Clientes` (`id_auditoria`, `id_cliente`, `campo_modificado`, `valor_antiguo`, `valor_nuevo`, `fecha_modificacion`).
-* **Disparador Reactivo:** `trg_audit_cliente_after_update` (`AFTER UPDATE`), diseñado para registrar de forma atómica cualquier modificación en `email` o `direccion_envio` (con notas de compatibilidad directa para `customers` y `shipping_address`).
+Módulo de cumplimiento y seguridad para trazabilidad de datos personales sensibles alineado con el esquema relacional en inglés:
+* **Tabla de Auditoría:** `customer_audit_logs` (`audit_id`, `customer_id`, `changed_field`, `old_value`, `new_value`, `changed_at`).
+* **Vista de Compatibilidad:** `Auditoria_Clientes` (mapea directamente a `id_auditoria`, `id_cliente`, `campo_modificado`, `valor_antiguo`, `valor_nuevo`, `fecha_modificacion`).
+* **Disparador Reactivo:** `trg_audit_customer_after_update` (`AFTER UPDATE ON customers`), captura y audita cambios atómicos en `email` o `shipping_address`.
 
 ---
 
