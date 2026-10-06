@@ -34,38 +34,41 @@ CREATE TRIGGER trg_audit_customer_after_update
 AFTER UPDATE ON customers
 FOR EACH ROW
 BEGIN
-    -- Audit email modifications
-    IF NOT (OLD.email <=> NEW.email) THEN
-        INSERT INTO customer_audit_logs (
-            customer_id,
-            changed_field,
-            old_value,
-            new_value,
-            changed_at
-        ) VALUES (
-            NEW.customer_id,
-            'email',
-            OLD.email,
-            NEW.email,
-            NOW()
-        );
-    END IF;
+    -- GDPR Compliance: Skip audit capturing if this update is an account anonymization action
+    IF NOT (NEW.first_name = 'Anonymized' AND NEW.last_name = 'Customer') THEN
+        -- Audit email modifications
+        IF NOT (OLD.email <=> NEW.email) THEN
+            INSERT INTO customer_audit_logs (
+                customer_id,
+                changed_field,
+                old_value,
+                new_value,
+                changed_at
+            ) VALUES (
+                NEW.customer_id,
+                'email',
+                OLD.email,
+                NEW.email,
+                NOW()
+            );
+        END IF;
 
-    -- Audit shipping address modifications
-    IF NOT (OLD.shipping_address <=> NEW.shipping_address) THEN
-        INSERT INTO customer_audit_logs (
-            customer_id,
-            changed_field,
-            old_value,
-            new_value,
-            changed_at
-        ) VALUES (
-            NEW.customer_id,
-            'shipping_address',
-            OLD.shipping_address,
-            NEW.shipping_address,
-            NOW()
-        );
+        -- Audit shipping address modifications
+        IF NOT (OLD.shipping_address <=> NEW.shipping_address) THEN
+            INSERT INTO customer_audit_logs (
+                customer_id,
+                changed_field,
+                old_value,
+                new_value,
+                changed_at
+            ) VALUES (
+                NEW.customer_id,
+                'shipping_address',
+                OLD.shipping_address,
+                NEW.shipping_address,
+                NOW()
+            );
+        END IF;
     END IF;
 END //
 

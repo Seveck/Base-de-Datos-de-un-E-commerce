@@ -192,7 +192,7 @@ CREATE TABLE price_change_logs (
     old_price DECIMAL(10, 2) NOT NULL,
     new_price DECIMAL(10, 2) NOT NULL,
     changed_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    changed_by VARCHAR(100) DEFAULT CURRENT_USER,
+    changed_by VARCHAR(100) DEFAULT (CURRENT_USER()),
     CONSTRAINT fk_price_logs_product FOREIGN KEY (product_id)
         REFERENCES products(product_id)
         ON UPDATE CASCADE ON DELETE CASCADE
@@ -215,9 +215,37 @@ CREATE TABLE order_status_logs (
     old_status VARCHAR(50) NOT NULL,
     new_status VARCHAR(50) NOT NULL,
     changed_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    changed_by VARCHAR(100) DEFAULT CURRENT_USER,
+    changed_by VARCHAR(100) DEFAULT (CURRENT_USER()),
     CONSTRAINT fk_status_logs_order FOREIGN KEY (order_id)
         REFERENCES orders(order_id)
+        ON UPDATE CASCADE ON DELETE CASCADE
+) ENGINE=InnoDB;
+
+CREATE TABLE IF NOT EXISTS product_returns (
+    return_id INT AUTO_INCREMENT PRIMARY KEY,
+    order_id INT NOT NULL,
+    product_id INT NOT NULL,
+    quantity INT NOT NULL,
+    reason VARCHAR(255) NOT NULL,
+    returned_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    CONSTRAINT chk_product_returns_qty CHECK (quantity > 0),
+    CONSTRAINT fk_product_returns_order FOREIGN KEY (order_id)
+        REFERENCES orders(order_id)
+        ON UPDATE CASCADE ON DELETE CASCADE,
+    CONSTRAINT fk_product_returns_product FOREIGN KEY (product_id)
+        REFERENCES products(product_id)
+        ON UPDATE CASCADE ON DELETE RESTRICT
+) ENGINE=InnoDB;
+
+CREATE TABLE IF NOT EXISTS customer_audit_logs (
+    audit_id INT AUTO_INCREMENT PRIMARY KEY,
+    customer_id INT NOT NULL,
+    changed_field VARCHAR(50) NOT NULL,
+    old_value TEXT NULL,
+    new_value TEXT NULL,
+    changed_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    CONSTRAINT fk_customer_audit_customer FOREIGN KEY (customer_id)
+        REFERENCES customers(customer_id)
         ON UPDATE CASCADE ON DELETE CASCADE
 ) ENGINE=InnoDB;
 
@@ -416,8 +444,8 @@ INSERT INTO orders (order_id, customer_id, branch_id, order_date, status, total_
 (1,  1, 1, '2025-01-15 10:30:00', 'Delivered', 1949.98, 0.00),
 (2,  2, 4, '2025-01-25 14:15:00', 'Delivered', 1149.98, 0.00),
 (3,  3, 2, '2025-02-10 18:45:00', 'Delivered', 2749.98, 0.00),
-(4,  1, 1, '2025-02-20 09:15:00', 'Delivered',  349.98, 9.99),
-(5,  4, 3, '2025-03-05 12:20:00', 'Delivered',  849.98, 0.00),
+(4,  1, 1, '2025-02-20 09:15:00', 'Delivered',  359.97, 9.99),
+(5,  4, 3, '2025-03-05 12:20:00', 'Delivered',  849.97, 0.00),
 (6,  5, 5, '2025-03-18 20:10:00', 'Delivered',  569.98, 0.00),
 (7,  2, 4, '2025-04-02 11:35:00', 'Delivered',  389.98, 0.00),
 (8,  6, 1, '2025-04-15 16:50:00', 'Delivered', 1239.98, 0.00),
@@ -447,10 +475,10 @@ INSERT INTO orders (order_id, customer_id, branch_id, order_date, status, total_
 (32, 10, 5, '2026-03-12 11:20:00', 'Shipped',    249.99, 0.00),
 (33, 4, 3, '2026-03-18 15:45:00', 'Processing',  189.98, 0.00),
 (34, 18, 3, '2026-03-22 17:10:00', 'Processing', 1139.98, 0.00),
-(35, 19, 4, '2026-03-25 12:50:00', 'Pending Payment', 499.99, 14.99),
+(35, 19, 4, '2026-03-25 12:50:00', 'Pending Payment', 514.98, 14.99),
 (36, 11, 1, '2026-03-26 14:35:00', 'Processing',  299.99, 0.00),
 (37, 5, 5, '2026-03-26 19:15:00', 'Pending Payment', 679.98, 0.00),
-(38, 12, 2, '2026-03-27 10:00:00', 'Delivered',   49.99, 4.99),
+(38, 12, 2, '2026-03-27 10:00:00', 'Delivered',   54.98, 4.99),
 (39, 3, 2, '2026-03-27 13:20:00', 'Cancelled',   849.98, 0.00),
 (40, 20, 5, '2026-03-27 18:00:00', 'Delivered',   179.99, 0.00);
 

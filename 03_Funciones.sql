@@ -56,7 +56,7 @@ DROP FUNCTION IF EXISTS fn_calculate_customer_age //
 CREATE FUNCTION fn_calculate_customer_age(p_customer_id INT)
 RETURNS INT
 READS SQL DATA
-DETERMINISTIC
+NOT DETERMINISTIC
 BEGIN
     DECLARE v_birth_date DATE;
     DECLARE v_age INT DEFAULT 0;
@@ -100,7 +100,7 @@ DROP FUNCTION IF EXISTS fn_is_new_customer //
 CREATE FUNCTION fn_is_new_customer(p_customer_id INT)
 RETURNS BOOLEAN
 READS SQL DATA
-DETERMINISTIC
+NOT DETERMINISTIC
 BEGIN
     DECLARE v_first_order_date DATETIME;
 
@@ -228,7 +228,7 @@ DROP FUNCTION IF EXISTS fn_days_since_last_purchase //
 CREATE FUNCTION fn_days_since_last_purchase(p_customer_id INT)
 RETURNS INT
 READS SQL DATA
-DETERMINISTIC
+NOT DETERMINISTIC
 BEGIN
     DECLARE v_last_purchase DATETIME;
 
@@ -272,7 +272,7 @@ DROP FUNCTION IF EXISTS fn_generate_sku //
 CREATE FUNCTION fn_generate_sku(p_product_name VARCHAR(150), p_category_id INT)
 RETURNS VARCHAR(60)
 READS SQL DATA
-DETERMINISTIC
+NOT DETERMINISTIC
 BEGIN
     DECLARE v_cat_code VARCHAR(10) DEFAULT 'GEN';
     DECLARE v_prod_code VARCHAR(10);

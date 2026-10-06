@@ -53,31 +53,53 @@ CREATE USER IF NOT EXISTS 'admin_user'@'localhost'
     IDENTIFIED BY 'Admin#P@ssw0rd2026!'
     PASSWORD EXPIRE INTERVAL 90 DAY;
 GRANT 'role_system_admin' TO 'admin_user'@'localhost';
-SET DEFAULT ROLE 'role_system_admin' FOR 'admin_user'@'localhost';
 
 CREATE USER IF NOT EXISTS 'marketing_user'@'localhost' 
     IDENTIFIED BY 'Mktg#P@ssw0rd2026!'
     PASSWORD EXPIRE INTERVAL 90 DAY;
 GRANT 'role_marketing_manager' TO 'marketing_user'@'localhost';
-SET DEFAULT ROLE 'role_marketing_manager' FOR 'marketing_user'@'localhost';
 
 CREATE USER IF NOT EXISTS 'inventory_user'@'localhost' 
     IDENTIFIED BY 'Inven#P@ssw0rd2026!'
     PASSWORD EXPIRE INTERVAL 90 DAY;
 GRANT 'role_inventory_clerk' TO 'inventory_user'@'localhost';
-SET DEFAULT ROLE 'role_inventory_clerk' FOR 'inventory_user'@'localhost';
 
 CREATE USER IF NOT EXISTS 'support_user'@'localhost' 
     IDENTIFIED BY 'Supp#P@ssw0rd2026!'
     PASSWORD EXPIRE INTERVAL 90 DAY;
 GRANT 'role_customer_support' TO 'support_user'@'localhost';
-SET DEFAULT ROLE 'role_customer_support' FOR 'support_user'@'localhost';
 
 CREATE USER IF NOT EXISTS 'analyst_user'@'localhost'
     IDENTIFIED BY 'Data#P@ssw0rd2026!'
     PASSWORD EXPIRE INTERVAL 90 DAY;
 GRANT 'role_data_analyst' TO 'analyst_user'@'localhost';
-SET DEFAULT ROLE 'role_data_analyst' FOR 'analyst_user'@'localhost';
+
+-- Cross-engine default role assignment (MySQL 8.0 requires 'TO', MariaDB requires 'FOR')
+DELIMITER //
+DROP PROCEDURE IF EXISTS _sp_assign_default_role //
+CREATE PROCEDURE _sp_assign_default_role(IN p_role VARCHAR(100), IN p_user VARCHAR(100), IN p_host VARCHAR(100))
+BEGIN
+    DECLARE v_sql VARCHAR(500);
+    IF VERSION() LIKE '%MariaDB%' THEN
+        SET v_sql = CONCAT('SET DEFAULT ROLE `', p_role, '` FOR `', p_user, '`@`', p_host, '`');
+    ELSE
+        -- MySQL 8.0 standard syntax
+        SET v_sql = CONCAT('SET DEFAULT ROLE `', p_role, '` TO `', p_user, '`@`', p_host, '`');
+    END IF;
+    SET @role_stmt = v_sql;
+    PREPARE stmt FROM @role_stmt;
+    EXECUTE stmt;
+    DEALLOCATE PREPARE stmt;
+END //
+DELIMITER ;
+
+CALL _sp_assign_default_role('role_system_admin', 'admin_user', 'localhost');
+CALL _sp_assign_default_role('role_marketing_manager', 'marketing_user', 'localhost');
+CALL _sp_assign_default_role('role_inventory_clerk', 'inventory_user', 'localhost');
+CALL _sp_assign_default_role('role_customer_support', 'support_user', 'localhost');
+CALL _sp_assign_default_role('role_data_analyst', 'analyst_user', 'localhost');
+
+DROP PROCEDURE IF EXISTS _sp_assign_default_role;
 
 DELIMITER //
 CREATE PROCEDURE IF NOT EXISTS sp_generate_monthly_sales_report(IN p_month INT, IN p_year INT)
@@ -108,10 +130,6 @@ ALTER USER 'marketing_user'@'localhost' PASSWORD EXPIRE INTERVAL 90 DAY;
 ALTER USER 'inventory_user'@'localhost' PASSWORD EXPIRE INTERVAL 90 DAY;
 ALTER USER 'support_user'@'localhost' PASSWORD EXPIRE INTERVAL 90 DAY;
 ALTER USER 'analyst_user'@'localhost' PASSWORD EXPIRE INTERVAL 90 DAY;
-
-DELETE FROM mysql.user 
-WHERE User = 'root' 
-  AND Host NOT IN ('localhost', '127.0.0.1', '::1');
 FLUSH PRIVILEGES;
 
 CREATE ROLE IF NOT EXISTS 'role_guest';
@@ -146,10 +164,14 @@ SELECT
     o.total_amount
 FROM orders o
 JOIN branches b ON o.branch_id = b.branch_id
-JOIN user_branch_assignments uba ON o.branch_id = uba.branch_id
-WHERE uba.username = SUBSTRING_INDEX(USER(), '@', 1)
-   OR USER() LIKE 'root@%'
-   OR USER() LIKE 'admin_user@%';
+WHERE SUBSTRING_INDEX(USER(), '@', 1) IN ('root', 'admin_user')
+   OR CURRENT_USER() LIKE 'root@%'
+   OR CURRENT_USER() LIKE 'admin_user@%'
+   OR o.branch_id IN (
+       SELECT uba.branch_id 
+       FROM user_branch_assignments uba 
+       WHERE uba.username = SUBSTRING_INDEX(USER(), '@', 1)
+   );
 
 GRANT SELECT ON ecommerce_db.v_branch_scoped_orders TO 'role_customer_support';
 GRANT SELECT ON ecommerce_db.v_branch_scoped_orders TO 'role_inventory_clerk';

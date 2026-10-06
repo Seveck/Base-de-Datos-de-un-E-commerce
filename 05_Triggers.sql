@@ -6,7 +6,7 @@ CREATE TABLE IF NOT EXISTS price_change_logs (
     old_price DECIMAL(10, 2) NOT NULL,
     new_price DECIMAL(10, 2) NOT NULL,
     changed_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    changed_by VARCHAR(100) DEFAULT CURRENT_USER,
+    changed_by VARCHAR(100) DEFAULT (CURRENT_USER()),
     CONSTRAINT fk_price_logs_product FOREIGN KEY (product_id)
         REFERENCES products(product_id)
         ON UPDATE CASCADE ON DELETE CASCADE
@@ -155,6 +155,42 @@ BEGIN
     WHERE order_id = NEW.order_id;
 END //
 
+DROP TRIGGER IF EXISTS trg_adjust_stock_and_total_on_detail_update //
+CREATE TRIGGER trg_adjust_stock_and_total_on_detail_update
+AFTER UPDATE ON order_details
+FOR EACH ROW
+BEGIN
+    UPDATE products
+    SET stock = stock - (NEW.quantity - OLD.quantity)
+    WHERE product_id = NEW.product_id;
+
+    UPDATE orders
+    SET total_amount = (
+        SELECT COALESCE(SUM(quantity * frozen_unit_price), 0.00)
+        FROM order_details
+        WHERE order_id = NEW.order_id
+    ) + shipping_cost
+    WHERE order_id = NEW.order_id;
+END //
+
+DROP TRIGGER IF EXISTS trg_restore_stock_and_total_on_detail_delete //
+CREATE TRIGGER trg_restore_stock_and_total_on_detail_delete
+AFTER DELETE ON order_details
+FOR EACH ROW
+BEGIN
+    UPDATE products
+    SET stock = stock + OLD.quantity
+    WHERE product_id = OLD.product_id;
+
+    UPDATE orders
+    SET total_amount = (
+        SELECT COALESCE(SUM(quantity * frozen_unit_price), 0.00)
+        FROM order_details
+        WHERE order_id = OLD.order_id
+    ) + shipping_cost
+    WHERE order_id = OLD.order_id;
+END //
+
 DROP TRIGGER IF EXISTS trg_log_order_status_change //
 CREATE TRIGGER trg_log_order_status_change
 AFTER UPDATE ON orders
@@ -282,6 +318,37 @@ BEGIN
         UPDATE categories
         SET products_count = products_count + 1
         WHERE category_id = NEW.category_id;
+    END IF;
+END //
+
+DROP TRIGGER IF EXISTS trg_update_product_count_on_category_change //
+CREATE TRIGGER trg_update_product_count_on_category_change
+AFTER UPDATE ON products
+FOR EACH ROW
+BEGIN
+    IF NOT (OLD.category_id <=> NEW.category_id) THEN
+        IF OLD.category_id IS NOT NULL THEN
+            UPDATE categories
+            SET products_count = GREATEST(products_count - 1, 0)
+            WHERE category_id = OLD.category_id;
+        END IF;
+        IF NEW.category_id IS NOT NULL THEN
+            UPDATE categories
+            SET products_count = products_count + 1
+            WHERE category_id = NEW.category_id;
+        END IF;
+    END IF;
+END //
+
+DROP TRIGGER IF EXISTS trg_decrement_product_count_on_delete //
+CREATE TRIGGER trg_decrement_product_count_on_delete
+AFTER DELETE ON products
+FOR EACH ROW
+BEGIN
+    IF OLD.category_id IS NOT NULL THEN
+        UPDATE categories
+        SET products_count = GREATEST(products_count - 1, 0)
+        WHERE category_id = OLD.category_id;
     END IF;
 END //
 

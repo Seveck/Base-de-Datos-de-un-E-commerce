@@ -308,9 +308,12 @@ BEGIN
         ROW_NUMBER() OVER (ORDER BY COALESCE(SUM(od.quantity), 0) DESC) AS rank_pos,
         NOW()
     FROM products p
-    LEFT JOIN order_details od ON p.product_id = od.product_id
-    LEFT JOIN orders o ON od.order_id = o.order_id AND o.status NOT IN ('Cancelled')
+    LEFT JOIN (
+        order_details od 
+        JOIN orders o ON od.order_id = o.order_id AND o.status NOT IN ('Cancelled')
+    ) ON p.product_id = od.product_id
     GROUP BY p.product_id, p.name
+    ORDER BY units_sold DESC
     LIMIT 20;
 END //
 
@@ -405,15 +408,28 @@ BEGIN
     SELECT 
         c.category_id,
         c.name,
-        COUNT(DISTINCT p.product_id),
-        COALESCE(SUM(p.stock), 0),
-        COALESCE(SUM(od.quantity * od.frozen_unit_price), 0.00),
+        COALESCE(p_agg.total_products, 0),
+        COALESCE(p_agg.total_stock, 0),
+        COALESCE(s_agg.total_sales_revenue, 0.00),
         NOW()
     FROM categories c
-    LEFT JOIN products p ON c.category_id = p.category_id
-    LEFT JOIN order_details od ON p.product_id = od.product_id
-    LEFT JOIN orders o ON od.order_id = o.order_id AND o.status NOT IN ('Cancelled')
-    GROUP BY c.category_id, c.name;
+    LEFT JOIN (
+        SELECT 
+            category_id,
+            COUNT(product_id) AS total_products,
+            SUM(stock) AS total_stock
+        FROM products
+        GROUP BY category_id
+    ) p_agg ON c.category_id = p_agg.category_id
+    LEFT JOIN (
+        SELECT 
+            p.category_id,
+            SUM(od.quantity * od.frozen_unit_price) AS total_sales_revenue
+        FROM order_details od
+        JOIN orders o ON od.order_id = o.order_id AND o.status NOT IN ('Cancelled')
+        JOIN products p ON od.product_id = p.product_id
+        GROUP BY p.category_id
+    ) s_agg ON c.category_id = s_agg.category_id;
 END //
 
 DROP EVENT IF EXISTS evt_log_database_size_weekly //
@@ -474,16 +490,22 @@ BEGIN
         s.supplier_id,
         v_prev_month,
         v_prev_year,
-        COALESCE(SUM(od.quantity), 0),
-        COALESCE(SUM(od.quantity * od.frozen_unit_price), 0.00),
+        COALESCE(SUM(sales.quantity), 0),
+        COALESCE(SUM(sales.quantity * sales.frozen_unit_price), 0.00),
         NOW()
     FROM suppliers s
     JOIN products p ON s.supplier_id = p.supplier_id
-    LEFT JOIN order_details od ON p.product_id = od.product_id
-    LEFT JOIN orders o ON od.order_id = o.order_id 
-        AND MONTH(o.order_date) = v_prev_month 
-        AND YEAR(o.order_date) = v_prev_year
-        AND o.status NOT IN ('Cancelled')
+    LEFT JOIN (
+        SELECT 
+            od.product_id,
+            od.quantity,
+            od.frozen_unit_price
+        FROM order_details od
+        JOIN orders o ON od.order_id = o.order_id
+        WHERE MONTH(o.order_date) = v_prev_month 
+          AND YEAR(o.order_date) = v_prev_year
+          AND o.status NOT IN ('Cancelled')
+    ) sales ON p.product_id = sales.product_id
     GROUP BY s.supplier_id;
 END //
 

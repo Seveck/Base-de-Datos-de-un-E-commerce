@@ -1,5 +1,21 @@
 USE ecommerce_db;
 
+CREATE TABLE IF NOT EXISTS product_returns (
+    return_id INT AUTO_INCREMENT PRIMARY KEY,
+    order_id INT NOT NULL,
+    product_id INT NOT NULL,
+    quantity INT NOT NULL,
+    reason VARCHAR(255) NOT NULL,
+    returned_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    CONSTRAINT chk_product_returns_qty CHECK (quantity > 0),
+    CONSTRAINT fk_product_returns_order FOREIGN KEY (order_id)
+        REFERENCES orders(order_id)
+        ON UPDATE CASCADE ON DELETE CASCADE,
+    CONSTRAINT fk_product_returns_product FOREIGN KEY (product_id)
+        REFERENCES products(product_id)
+        ON UPDATE CASCADE ON DELETE RESTRICT
+) ENGINE=InnoDB;
+
 DELIMITER //
 
 DROP PROCEDURE IF EXISTS sp_place_new_order //
@@ -144,6 +160,7 @@ CREATE PROCEDURE sp_process_product_return(
 )
 BEGIN
     DECLARE v_purchased_quantity INT DEFAULT 0;
+    DECLARE v_already_returned INT DEFAULT 0;
 
     DECLARE EXIT HANDLER FOR SQLEXCEPTION
     BEGIN
@@ -151,11 +168,20 @@ BEGIN
         RESIGNAL;
     END;
 
-    SELECT quantity INTO v_purchased_quantity
+    IF p_return_quantity <= 0 THEN
+        SIGNAL SQLSTATE '45000'
+        SET MESSAGE_TEXT = 'Invalid return quantity: Must be greater than 0.';
+    END IF;
+
+    SELECT COALESCE(quantity, 0) INTO v_purchased_quantity
     FROM order_details
     WHERE order_id = p_order_id AND product_id = p_product_id;
 
-    IF v_purchased_quantity = 0 OR p_return_quantity > v_purchased_quantity THEN
+    SELECT COALESCE(SUM(quantity), 0) INTO v_already_returned
+    FROM product_returns
+    WHERE order_id = p_order_id AND product_id = p_product_id;
+
+    IF v_purchased_quantity = 0 OR (v_already_returned + p_return_quantity) > v_purchased_quantity THEN
         SIGNAL SQLSTATE '45000'
         SET MESSAGE_TEXT = 'Invalid return: Quantity exceeds original order purchase.';
     END IF;
@@ -164,6 +190,9 @@ BEGIN
         UPDATE products
         SET stock = stock + p_return_quantity
         WHERE product_id = p_product_id;
+
+        INSERT INTO product_returns (order_id, product_id, quantity, reason, returned_at)
+        VALUES (p_order_id, p_product_id, p_return_quantity, p_reason, NOW());
 
         INSERT INTO customer_logs (customer_id, action, details, logged_at)
         SELECT 
@@ -243,6 +272,12 @@ CREATE PROCEDURE sp_safely_delete_customer(IN p_customer_id INT)
 BEGIN
     DECLARE v_exists INT;
 
+    DECLARE EXIT HANDLER FOR SQLEXCEPTION
+    BEGIN
+        ROLLBACK;
+        RESIGNAL;
+    END;
+
     SELECT COUNT(*) INTO v_exists
     FROM customers
     WHERE customer_id = p_customer_id;
@@ -252,24 +287,29 @@ BEGIN
         SET MESSAGE_TEXT = 'Customer ID does not exist.';
     END IF;
 
-    UPDATE customers
-    SET first_name = 'Anonymized',
-        last_name = 'Customer',
-        email = CONCAT('anonymized_', p_customer_id, '@gdpr.removed'),
-        password_hash = 'REDACTED_ACCOUNT_DISABLED',
-        shipping_address = 'Address Permanently Redacted',
-        city = 'Redacted',
-        birth_date = '1970-01-01',
-        is_active = FALSE
-    WHERE customer_id = p_customer_id;
+    START TRANSACTION;
+        UPDATE customers
+        SET first_name = 'Anonymized',
+            last_name = 'Customer',
+            email = CONCAT('anonymized_', p_customer_id, '@gdpr.removed'),
+            password_hash = 'REDACTED_ACCOUNT_DISABLED',
+            shipping_address = 'Address Permanently Redacted',
+            city = 'Redacted',
+            birth_date = '1970-01-01',
+            is_active = FALSE
+        WHERE customer_id = p_customer_id;
 
-    INSERT INTO customer_logs (customer_id, action, details, logged_at)
-    VALUES (
-        p_customer_id,
-        'ACCOUNT_ANONYMIZED',
-        'Customer PII safely anonymized to preserve commercial transaction history.',
-        NOW()
-    );
+        DELETE FROM customer_audit_logs
+        WHERE customer_id = p_customer_id;
+
+        INSERT INTO customer_logs (customer_id, action, details, logged_at)
+        VALUES (
+            p_customer_id,
+            'ACCOUNT_ANONYMIZED',
+            'Customer PII safely anonymized to preserve commercial transaction history.',
+            NOW()
+        );
+    COMMIT;
 END //
 
 DROP PROCEDURE IF EXISTS sp_apply_discount_by_category //
@@ -318,6 +358,12 @@ CREATE PROCEDURE sp_change_order_status(
 BEGIN
     DECLARE v_current_status VARCHAR(50);
 
+    DECLARE EXIT HANDLER FOR SQLEXCEPTION
+    BEGIN
+        ROLLBACK;
+        RESIGNAL;
+    END;
+
     SELECT status INTO v_current_status
     FROM orders
     WHERE order_id = p_order_id;
@@ -332,9 +378,18 @@ BEGIN
         SET MESSAGE_TEXT = 'Invalid order status value provided.';
     END IF;
 
-    UPDATE orders
-    SET status = p_new_status
-    WHERE order_id = p_order_id;
+    START TRANSACTION;
+        UPDATE orders
+        SET status = p_new_status
+        WHERE order_id = p_order_id;
+
+        IF p_new_status = 'Cancelled' AND v_current_status <> 'Cancelled' THEN
+            UPDATE products p
+            JOIN order_details od ON p.product_id = od.product_id
+            SET p.stock = p.stock + od.quantity
+            WHERE od.order_id = p_order_id;
+        END IF;
+    COMMIT;
 END //
 
 DROP PROCEDURE IF EXISTS sp_register_new_customer //
@@ -641,3 +696,6 @@ BEGIN
 END //
 
 DELIMITER ;
+
+-- Re-grant execute permission to marketing manager revoked by DROP PROCEDURE
+GRANT EXECUTE ON PROCEDURE ecommerce_db.sp_generate_monthly_sales_report TO 'role_marketing_manager';

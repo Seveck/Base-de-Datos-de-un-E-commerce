@@ -28,8 +28,10 @@ WITH product_sales AS (
         COALESCE(SUM(od.quantity * od.frozen_unit_price), 0.00) AS total_revenue
     FROM products p
     JOIN categories c ON p.category_id = c.category_id
-    LEFT JOIN order_details od ON p.product_id = od.product_id
-    LEFT JOIN orders o ON od.order_id = o.order_id AND o.status NOT IN ('Cancelled')
+    LEFT JOIN (
+        order_details od 
+        JOIN orders o ON od.order_id = o.order_id AND o.status NOT IN ('Cancelled')
+    ) ON p.product_id = od.product_id
     GROUP BY p.product_id, p.name, c.name, p.stock
 ),
 ranked_products AS (
@@ -138,22 +140,39 @@ ORDER BY frequency_bought_together DESC, product_a ASC
 LIMIT 10;
 
 -- 8. Inventory Turnover by Product Category
+WITH category_inventory AS (
+    SELECT 
+        c.category_id,
+        c.name AS category_name,
+        SUM(p.stock) AS total_units_in_stock,
+        ROUND(SUM(p.stock * p.cost), 2) AS current_inventory_cost_value
+    FROM categories c
+    JOIN products p ON c.category_id = p.category_id
+    GROUP BY c.category_id, c.name
+),
+category_cogs AS (
+    SELECT 
+        p.category_id,
+        COALESCE(ROUND(SUM(od.quantity * p.cost), 2), 0.00) AS total_cogs_sold
+    FROM products p
+    JOIN order_details od ON p.product_id = od.product_id
+    JOIN orders o ON od.order_id = o.order_id
+    WHERE o.status NOT IN ('Cancelled')
+    GROUP BY p.category_id
+)
 SELECT 
-    c.category_id,
-    c.name AS category_name,
-    SUM(p.stock) AS total_units_in_stock,
-    ROUND(SUM(p.stock * p.cost), 2) AS current_inventory_cost_value,
-    COALESCE(ROUND(SUM(od.quantity * p.cost), 2), 0.00) AS total_cogs_sold,
+    ci.category_id,
+    ci.category_name,
+    ci.total_units_in_stock,
+    ci.current_inventory_cost_value,
+    COALESCE(cc.total_cogs_sold, 0.00) AS total_cogs_sold,
     ROUND(
-        COALESCE(SUM(od.quantity * p.cost), 0.00) / 
-        NULLIF(SUM(p.stock * p.cost), 0), 
+        COALESCE(cc.total_cogs_sold, 0.00) / 
+        NULLIF(ci.current_inventory_cost_value, 0), 
         3
     ) AS inventory_turnover_ratio
-FROM categories c
-JOIN products p ON c.category_id = p.category_id
-LEFT JOIN order_details od ON p.product_id = od.product_id
-LEFT JOIN orders o ON od.order_id = o.order_id AND o.status NOT IN ('Cancelled')
-GROUP BY c.category_id, c.name
+FROM category_inventory ci
+LEFT JOIN category_cogs cc ON ci.category_id = cc.category_id
 ORDER BY inventory_turnover_ratio DESC;
 
 -- 9. Products Needing Reorder (Below Safety Threshold)
@@ -205,8 +224,10 @@ SELECT
     DENSE_RANK() OVER (ORDER BY COALESCE(SUM(od.quantity * od.frozen_unit_price), 0) DESC) AS performance_rank
 FROM suppliers s
 JOIN products p ON s.supplier_id = p.supplier_id
-LEFT JOIN order_details od ON p.product_id = od.product_id
-LEFT JOIN orders o ON od.order_id = o.order_id AND o.status NOT IN ('Cancelled')
+LEFT JOIN (
+    order_details od 
+    JOIN orders o ON od.order_id = o.order_id AND o.status NOT IN ('Cancelled')
+) ON p.product_id = od.product_id
 GROUP BY s.supplier_id, s.company_name
 ORDER BY performance_rank ASC;
 
@@ -331,8 +352,10 @@ SELECT
     COALESCE(ROUND(SUM(od.quantity * (od.frozen_unit_price - p.cost)), 2), 0.00) AS total_lifetime_gross_profit
 FROM products p
 JOIN categories c ON p.category_id = c.category_id
-LEFT JOIN order_details od ON p.product_id = od.product_id
-LEFT JOIN orders o ON od.order_id = o.order_id AND o.status NOT IN ('Cancelled')
+LEFT JOIN (
+    order_details od 
+    JOIN orders o ON od.order_id = o.order_id AND o.status NOT IN ('Cancelled')
+) ON p.product_id = od.product_id
 GROUP BY p.product_id, p.name, c.name, p.cost, p.price
 ORDER BY total_lifetime_gross_profit DESC;
 
@@ -378,8 +401,10 @@ SELECT
     ROUND(COALESCE(SUM(od.quantity * od.frozen_unit_price), 0), 2) AS total_revenue
 FROM products p
 JOIN categories c ON p.category_id = c.category_id
-LEFT JOIN order_details od ON p.product_id = od.product_id
-LEFT JOIN orders o ON od.order_id = o.order_id AND o.status NOT IN ('Cancelled')
+LEFT JOIN (
+    order_details od 
+    JOIN orders o ON od.order_id = o.order_id AND o.status NOT IN ('Cancelled')
+) ON p.product_id = od.product_id
 GROUP BY p.product_id, p.name, c.name, p.views_count
 ORDER BY units_purchased DESC, product_page_views DESC;
 

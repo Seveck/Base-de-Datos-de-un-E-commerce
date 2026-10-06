@@ -24,12 +24,13 @@ El repositorio contiene todos los scripts en la raíz del proyecto, debidamente 
 | **`05_Triggers.sql`** | Creación de tabla de auditoría de precios y 20 disparadores de integridad y auditoría automática. |
 | **`06_Eventos.sql`** | Activación del motor `event_scheduler`, tablas de agregación y 20 tareas programadas de mantenimiento y KPIs. |
 | **`07_Procedimientos_Almacenados.sql`** | 20 procedimientos almacenados transaccionales, operativos y analíticos con control de excepciones. |
+| **`08_Auditoria_Clientes.sql`** | Auditoría de datos sensibles de clientes (email y dirección), tabla `customer_audit_logs`, vista de compatibilidad `Auditoria_Clientes` y trigger automatizado. |
 
 ---
 
 ## Instrucciones de Ejecución Secuencial
 
-Para recrear y validar el sistema en su totalidad, ejecute los archivos en el orden numérico estricto del **01 al 07**.
+Para recrear y validar el sistema en su totalidad, ejecute los archivos en el orden numérico estricto del **01 al 08**.
 
 ### Opción A: Ejecución desde la Terminal / Línea de Comandos (CLI)
 
@@ -56,6 +57,9 @@ mysql -u root -p < 06_Eventos.sql
 
 # 7. Compilar los 20 procedimientos almacenados transaccionales
 mysql -u root -p < 07_Procedimientos_Almacenados.sql
+
+# 8. Implementar módulo de auditoría de seguridad y trazabilidad de clientes
+mysql -u root -p < 08_Auditoria_Clientes.sql
 ```
 
 > **Nota:** También es posible utilizar el cliente interactivo `mariadb` de la misma manera:  
@@ -64,7 +68,7 @@ mysql -u root -p < 07_Procedimientos_Almacenados.sql
 ### Opción B: Ejecución desde Interfaces Gráficas (MySQL Workbench / DBeaver / phpMyAdmin)
 1. Conéctese a su servidor de base de datos como usuario con privilegios de administrador (`root`).
 2. Abra y ejecute el script **`01_Esquema_y_Datos.sql`**.
-3. Abra y ejecute sucesivamente los scripts del **`02`** al **`07`** en orden numérico.
+3. Abra y ejecute sucesivamente los scripts del **`02`** al **`08`** en orden numérico.
 
 ---
 
